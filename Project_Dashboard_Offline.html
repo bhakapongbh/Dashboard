@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project Dashboard (Offline, No Dependencies)</title>
+  <style>
+    :root{
+      --slate-50:#f8fafc;--slate-100:#f1f5f9;--slate-200:#e2e8f0;--slate-300:#cbd5e1;--slate-400:#94a3b8;--slate-500:#64748b;--slate-700:#334155;--slate-900:#0f172a;
+      --indigo-50:#eef2ff;--indigo-100:#e0e7ff;--indigo-600:#4f46e5;--indigo-700:#4338ca;--emerald-500:#10b981;--rose-500:#f43f5e;--amber-100:#fef3c7;
+    }
+    *{box-sizing:border-box}body{margin:0;background:var(--slate-50);color:var(--slate-900);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans",sans-serif}
+    .container{max-width:1400px;margin:0 auto;padding:16px 16px 80px}
+    h1{margin:0}
+    .row{display:flex;gap:24px;flex-wrap:wrap}
+    .card{background:#fff;border:1px solid var(--slate-100);border-radius:32px;box-shadow:0 1px 2px rgba(0,0,0,.04);padding:24px}
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:12px 16px;border-radius:16px;border:1px solid var(--slate-200);background:#fff;color:var(--slate-700);font-weight:800;font-size:12px;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+    .btn.primary{background:var(--indigo-600);border-color:var(--indigo-600);color:#fff;box-shadow:0 10px 20px rgba(79,70,229,.12)}
+    .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:8px;font-size:10px;font-weight:900;text-transform:uppercase}
+    .badge.online{background:#d1fae5;color:#065f46}.badge.offline{background:#ffe4e6;color:#9f1239}
+    .muted{color:var(--slate-400)}
+    .grid{display:grid;gap:24px}
+    @media(min-width:1024px){.grid-12{grid-template-columns:repeat(12,1fr)}.col-8{grid-column:span 8}.col-4{grid-column:span 4}}
+
+    /* Table */
+    table{width:100%;border-collapse:collapse;min-width:900px}
+    thead th{font-size:10px;color:var(--slate-400);text-transform:uppercase;letter-spacing:.12em;border-bottom:1px solid var(--slate-100);padding:20px 16px;text-align:left}
+    tbody td{border-bottom:1px solid var(--slate-100);padding:20px 16px}
+    tr:hover{background:rgba(15,23,42,.03)}
+    .drag{cursor:grab;color:var(--slate-300)}
+    .progress{height:8px;background:var(--slate-100);border-radius:999px;overflow:hidden}
+    .progress > div{height:100%;background:var(--indigo-600)}
+
+    /* Modal */
+    .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.6);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center;padding:16px;animation:fade .2s ease}
+    .modal{background:#fff;border-radius:32px;max-width:420px;width:100%;padding:24px 24px}
+    .input, .textarea, .date{width:100%;border:2px solid var(--slate-100);background:var(--slate-50);border-radius:16px;padding:12px;font-weight:700}
+    .textarea{min-height:120px;resize:vertical}
+    .section-title{font-size:14px;font-weight:900}
+    .tiny{font-size:10px;text-transform:uppercase;letter-spacing:.12em;color:var(--slate-400)}
+    .pill{display:inline-block;background:var(--slate-100);color:var(--slate-500);padding:4px 10px;border-radius:10px;font-size:10px;font-weight:900;text-transform:uppercase}
+    @keyframes fade{from{opacity:0}to{opacity:1}}
+
+    /* Simple icons (fallback: Unicode) */
+    .ic{display:inline-block;width:14px;text-align:center}
+
+    /* Chart */
+    .chart-wrap{width:100%;height:340px}
+    svg{font-family:inherit}
+    .axis text{fill:var(--slate-500);font-size:10px;font-weight:800}
+    .gridline{stroke:var(--slate-100);stroke-dasharray:3 3}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="row" style="align-items:center;justify-content:space-between;margin-bottom:24px">
+      <div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+          <h1 style="font-size:28px;font-weight:900">Project Dashboard</h1>
+          <span id="onlineBadge" class="badge online"><span class="ic">📶</span><span id="onlineText">Online</span></span>
+        </div>
+        <div class="muted" style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.08em">
+          <span><span class="ic">📅</span> วันนี้: <span id="todayStr" style="color:var(--slate-900)"></span></span>
+          <span style="color:var(--slate-200)">|</span>
+          <span style="color:var(--rose-500)"><span class="ic">⏱️</span> เหลือเวลาอีก: <span id="daysLeft" style="color:#b91c1c;font-weight:900"></span> วัน ถึงวันนำเสนอ (9 เม.ย. 69)</span>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="shareBtn" class="btn"><span class="ic">🔗</span><span id="shareText">แชร์ลิงก์</span></button>
+        <button id="addBtn" class="btn primary"><span class="ic">＋</span>กิจกรรมใหม่</button>
+      </div>
+    </header>
+
+    <section class="grid grid-12" style="margin-bottom:24px">
+      <div class="card col-8">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span class="ic" style="color:var(--indigo-600)">🎯</span>
+          <div class="section-title">กราฟวิเคราะห์ความก้าวหน้า (S-Curve)</div>
+        </div>
+        <div class="chart-wrap"><svg id="chart" width="100%" height="100%"></svg></div>
+      </div>
+      <div class="col-4" style="display:flex;flex-direction:column;gap:24px">
+        <div class="card" style="background:var(--indigo-600);color:#fff;box-shadow:0 20px 40px rgba(79,70,229,.2)">
+          <div class="tiny" style="color:#c7d2fe">ความสำเร็จโดยรวม</div>
+          <div id="totalProgress" style="font-size:56px;font-weight:900;margin:8px 0 16px">0%</div>
+          <div id="varianceBox" style="display:flex;gap:12px;align-items:center;background:rgba(255,255,255,.12);padding:14px;border-radius:16px">
+            <div style="background:rgba(255,255,255,.25);padding:8px;border-radius:10px"><span id="varianceIcon" class="ic">✅</span></div>
+            <div>
+              <div class="tiny" id="varianceTitle" style="opacity:.9">Variance: +0%</div>
+              <div id="varianceText" style="font-size:12px;font-weight:800">โครงการเป็นไปตามแผน</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="flex:1">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <div style="background:var(--amber-100);color:#92400e;padding:8px;border-radius:10px" class="ic">💡</div>
+            <div class="section-title" style="color:var(--slate-700)">ข้อเสนอแนะ</div>
+          </div>
+          <div id="advice" style="font-size:12px;color:var(--slate-500);font-weight:800;line-height:1.7"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--slate-100);padding-bottom:8px;margin:-8px -8px 8px -8px;padding:16px">
+        <div class="section-title" style="display:flex;align-items:center;gap:8px;color:var(--slate-700)"><span class="ic" style="color:var(--slate-400)">#</span>รายละเอียดกิจกรรม (Project Activities)</div>
+        <div class="tiny" style="display:none;">คลิกที่ข้อมูลเพื่อแก้ไข</div>
+      </div>
+      <div style="overflow:auto">
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:center;width:48px">#</th>
+              <th style="width:100px">ลำดับ</th>
+              <th>ชื่อกิจกรรม</th>
+              <th style="text-align:center">ระยะเวลา</th>
+              <th style="text-align:center">น้ำหนัก (%)</th>
+              <th style="width:280px">ความคืบหน้า</th>
+              <th style="text-align:right;width:120px"></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="backdrop" style="display:none">
+    <div class="modal">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px">
+        <div id="modalIcon" class="ic" style="color:var(--indigo-600)">✏️</div>
+        <div id="modalTitle" class="section-title">แก้ไขข้อมูล</div>
+      </div>
+      <div id="modalContent"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px">
+        <button id="cancelBtn" class="btn" style="background:var(--slate-100);border-color:var(--slate-100);color:var(--slate-500)">ยกเลิก</button>
+        <button id="saveBtn" class="btn primary">บันทึก</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  // ---- Data & Storage ----
+  const LS_KEY = 'biometric_dashboard_group3_tasks_v3_nolib';
+  const initialTasks = [
+    { id: "1", task: "(พบอาจารย์ ครั้งที่ 1) กำหนดขอบเขตโครงการ และระบุ Pain Points หลัก", start: "2569-01-23", end: "2569-01-23", weight: 10, status: "completed", plan: 10, actual: 10 },
+    { id: "1.1", task: "รวบรวมสภาพปัญหาเชิงกายภาพและคอขวดที่ดอนเมือง และศึกษาความสำเร็จจาก Changi", start: "2569-01-24", end: "2569-01-30", weight: 5, status: "completed", plan: 5, actual: 5 },
+    { id: "1.2", task: "วิเคราะห์สถิติการใช้งาน Biometric ปัจจุบัน และข้อมูลทางเทคนิค (Architecture)", start: "2569-01-31", end: "2569-02-05", weight: 10, status: "in-progress", plan: 10, actual: 5 },
+    { id: "2", task: "(พบอาจารย์ ครั้งที่ 2) ศึกษาข้อ 1 และ 2 ด้านความปลอดภัยการบิน และกฎหมาย PDPA", start: "2569-02-06", end: "2569-02-12", weight: 10, status: "pending", plan: 10, actual: 0 },
+    { id: "2.1", task: "มาตรการจัดการข้อมูลอ่อนไหว (Sensitive Data) ตาม พ.ร.บ. คุ้มครองข้อมูลส่วนบุคคล", start: "2569-02-13", end: "2569-02-19", weight: 10, status: "pending", plan: 10, actual: 0 },
+    { id: "2.2", task: "วิเคราะห์เชิงบริหาร: ใช้เครื่องมือ SWOT และ PESTEL Analysis", start: "2569-02-20", end: "2569-02-26", weight: 10, status: "pending", plan: 10, actual: 0 },
+    { id: "3", task: "(พบอาจารย์ ครั้งที่ 3) สรุปผลสัมภาษณ์ และร่างแนวทาง Mobile Biometric", start: "2569-02-27", end: "2569-03-06", weight: 10, status: "pending", plan: 10, actual: 0 },
+    { id: "4", task: "(พบอาจารย์ ครั้งที่ 4) ออกแบบโมเดล Smart Seamless Path และการลงทะเบียนล่วงหน้า", start: "2569-03-07", end: "2569-03-12", weight: 15, status: "pending", plan: 15, actual: 0 },
+    { id: "4.1", task: "จัดทำแผนการปฏิบัติงาน (Phasing Plan)", start: "2569-03-13", end: "2569-03-20", weight: 10, status: "pending", plan: 10, actual: 0 },
+    { id: "5", task: "สรุปรายงานและเตรียมนำเสนอเล่มสมบูรณ์", start: "2569-03-21", end: "2569-04-10", weight: 10, status: "pending", plan: 10, actual: 0 }
+  ];
+
+  function load(){ try{ const v = localStorage.getItem(LS_KEY); return v? JSON.parse(v): initialTasks.slice(); }catch(e){ return initialTasks.slice(); } }
+  function save(arr){ try{ localStorage.setItem(LS_KEY, JSON.stringify(arr)); }catch(e){} }
+
+  // ---- Date Helpers (BE) ----
+  function todayBE(){ const d=new Date(); const y=d.getFullYear()+543; const m=String(d.getMonth()+1).padStart(2,'0'); const da=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${da}`; }
+  const PRESENTATION_DATE = '2569-04-09';
+  function daysUntilBE(beStr){ const [y,m,d]=beStr.split('-').map(Number); const target=new Date(y-543,m-1,d); const now=new Date(); const diff=Math.ceil((target-now)/(1000*60*60*24)); return diff>0? diff:0; }
+
+  // ---- State ----
+  let tasks = load();
+  let draggedIndex = null;
+  let editContext = null; // {type, taskId}
+
+  // ---- DOM ----
+  const tbody = document.getElementById('tbody');
+  const todayStrEl = document.getElementById('todayStr');
+  const daysLeftEl = document.getElementById('daysLeft');
+  const totalProgressEl = document.getElementById('totalProgress');
+  const varianceBox = document.getElementById('varianceBox');
+  const varianceIcon = document.getElementById('varianceIcon');
+  const varianceTitle = document.getElementById('varianceTitle');
+  const varianceText = document.getElementById('varianceText');
+  const advice = document.getElementById('advice');
+  const chartSvg = document.getElementById('chart');
+  const addBtn = document.getElementById('addBtn');
+  const shareBtn = document.getElementById('shareBtn');
+  const shareText = document.getElementById('shareText');
+  const onlineBadge = document.getElementById('onlineBadge');
+  const onlineText = document.getElementById('onlineText');
+
+  const modal = document.getElementById('modal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalIcon = document.getElementById('modalIcon');
+  const modalContent = document.getElementById('modalContent');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const saveBtn = document.getElementById('saveBtn');
+
+  // ---- Online status ----
+  function updateOnline(){
+    if(navigator.onLine){ onlineBadge.className='badge online'; onlineText.textContent='Online'; }
+    else { onlineBadge.className='badge offline'; onlineText.textContent='Offline'; }
+  }
+  window.addEventListener('online', updateOnline);
+  window.addEventListener('offline', updateOnline);
+
+  // ---- Calculations ----
+  function sum(arr, fn){ return arr.reduce((s,x)=>s+(+fn(x)||0),0); }
+  function totalWeight(){ return sum(tasks, t=>t.weight??t.plan??0); }
+  function totalActual(){ return sum(tasks, t=>t.actual||0); }
+  function percentProgress(){ const tw=totalWeight(); const a=totalActual(); return tw>0? Math.round((a/tw)*100):0; }
+  function planUntilToday(){ const today = todayBE(); return sum(tasks, t=> (t.start<=today? (t.weight??t.plan??0):0) ); }
+  function variance(){ return percentProgress() - planUntilToday(); }
+  function currentTaskId(){ const today=todayBE(); const cur=tasks.find(t=>t.start<=today && t.end>=today); if(cur) return cur.id; const past=tasks.filter(t=>t.start<=today); if(past.length>0) return past[past.length-1].id; return tasks[0]?.id||''; }
+
+  // ---- Render Table ----
+  function renderTable(){
+    tbody.innerHTML = '';
+    tasks.forEach((t, idx)=>{
+      const tr = document.createElement('tr');
+      tr.draggable = true;
+      tr.addEventListener('dragstart', ()=> draggedIndex = idx);
+      tr.addEventListener('dragover', (e)=>{ e.preventDefault(); if(draggedIndex===null || draggedIndex===idx) return; const copy=[...tasks]; const it=copy.splice(draggedIndex,1)[0]; copy.splice(idx,0,it); tasks=copy; draggedIndex=idx; save(tasks); renderAll(); });
+      tr.addEventListener('dragend', ()=> draggedIndex=null);
+
+      const w = +(t.weight ?? t.plan ?? 0);
+      const percent = w>0? Math.round(((+t.actual||0)/w)*100):0;
+
+      tr.innerHTML = `
+        <td style="text-align:center"><span class="drag">⋮⋮</span></td>
+        <td class="editable" data-type="id" style="font-weight:900;color:var(--slate-500);cursor:pointer">${t.id}</td>
+        <td class="editable" data-type="name" style="font-weight:800;color:var(--slate-700);cursor:pointer;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.task}</td>
+        <td class="editable" data-type="date" style="text-align:center;cursor:pointer"><span class="pill">${t.start}</span></td>
+        <td class="editable" data-type="weight" style="text-align:center;font-weight:900;color:var(--indigo-600);cursor:pointer">${w}%</td>
+        <td>
+          <div class="progress"><div style="width:${percent}%;${percent===100?'background:var(--emerald-500)':''}"></div></div>
+          <div class="tiny" style="text-align:right;margin-top:6px">${percent}%</div>
+        </td>
+        <td style="text-align:right">
+          <button class="btn btn-sm" data-action="progress" style="padding:8px 10px;border-radius:12px">แก้ไข</button>
+          <button class="btn btn-sm" data-action="delete" style="padding:8px 10px;border-radius:12px">ลบ</button>
+        </td>`;
+
+      tr.querySelectorAll('.editable').forEach(el=>{
+        el.addEventListener('click', ()=> openEdit(t.id, el.getAttribute('data-type')));
+      });
+      tr.querySelector('[data-action="progress"]').addEventListener('click', ()=> openEdit(t.id,'progress'));
+      tr.querySelector('[data-action="delete"]').addEventListener('click', ()=> { tasks = tasks.filter(x=>x.id!==t.id); save(tasks); renderAll(); });
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ---- Modal ----
+  function openModal(title, icon, contentHTML, onSave){
+    modalTitle.textContent = title; modalIcon.textContent = icon; modalContent.innerHTML = contentHTML; modal.style.display='flex';
+    const cleanup = ()=>{ modal.style.display='none'; saveBtn.onclick=null; cancelBtn.onclick=null; };
+    cancelBtn.onclick = cleanup;
+    saveBtn.onclick = ()=>{ onSave(); cleanup(); };
+  }
+
+  function openEdit(taskId, type){
+    const t = tasks.find(x=>x.id===taskId); if(!t) return; editContext={type, taskId};
+    if(type==='id'){
+      openModal('แก้ไขลำดับ (ID)','✏️', `<input id="inp" class="input" value="${t.id}">`, ()=>{ const v=document.getElementById('inp').value.trim(); if(v){ t.id=v; save(tasks); renderAll(); } });
+    } else if(type==='name'){
+      openModal('แก้ไขชื่อกิจกรรม','✏️', `<textarea id="ta" class="textarea">${t.task}</textarea>`, ()=>{ t.task=document.getElementById('ta').value; save(tasks); renderAll(); });
+    } else if(type==='weight'){
+      openModal('แก้น้ำหนักงาน (%)','⚖️', `<input id="num" type="number" class="input" value="${+(t.weight??t.plan??0)}">`, ()=>{ const newW=+document.getElementById('num').value||0; const oldW=+(t.weight??t.plan??1); const ratio=oldW? ((+t.actual||0)/oldW):0; t.weight=newW; t.plan=newW; t.actual=ratio*newW; save(tasks); renderAll(); });
+    } else if(type==='date'){
+      openModal('แก้ไขช่วงเวลา','📅', `
+        <div style="display:grid;gap:10px">
+          <div>
+            <div class="tiny" style="margin-bottom:6px">วันเริ่มต้น</div>
+            <input id="ds" type="date" class="date" value="${t.start}">
+          </div>
+          <div>
+            <div class="tiny" style="margin-bottom:6px">วันสิ้นสุด</div>
+            <input id="de" type="date" class="date" value="${t.end}">
+          </div>
+        </div>`, ()=>{ t.start=document.getElementById('ds').value; t.end=document.getElementById('de').value; save(tasks); renderAll(); });
+    } else if(type==='progress'){
+      const w = +(t.weight??t.plan??0);
+      const display = w>0? Math.round((+(t.actual||0)/w)*100):0;
+      openModal('แก้ไขความก้าวหน้า (%)','⏫', `
+        <div class="tiny" style="margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.task}</div>
+        <input id="pg" type="number" class="input" style="font-size:32px;text-align:center;color:var(--indigo-600)" value="${display}">`, ()=>{
+          const p = +document.getElementById('pg').value||0; const w=+(t.weight??t.plan??0); t.actual = (p/100)*w; t.status = p===100 ? 'completed':'in-progress'; save(tasks); renderAll();
+        });
+    }
+  }
+
+  function openAdd(){
+    openModal('เพิ่มกิจกรรมใหม่','➕', `
+      <div style="display:grid;gap:10px">
+        <div style="display:flex;gap:8px">
+          <input id="newId" class="input" style="flex:1" placeholder="ID">
+          <input id="newW" class="input" style="flex:1" type="number" placeholder="Weight %" value="10">
+        </div>
+        <textarea id="newName" class="textarea" placeholder="ชื่อกิจกรรม"></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <input id="newStart" class="date" type="date" value="${todayBE()}">
+          <input id="newEnd" class="date" type="date" value="${todayBE()}">
+        </div>
+      </div>
+    `, ()=>{
+      const obj = { id:document.getElementById('newId').value.trim(), task:document.getElementById('newName').value.trim(), start:document.getElementById('newStart').value, end:document.getElementById('newEnd').value, plan:+document.getElementById('newW').value||0, weight:+document.getElementById('newW').value||0, actual:0, status:'pending' };
+      if(!obj.id) return; tasks=[...tasks, obj]; save(tasks); renderAll();
+    });
+  }
+
+  // ---- Chart (SVG vanilla) ----
+  function renderChart(){
+    const width = chartSvg.clientWidth || chartSvg.parentElement.clientWidth;
+    const height = chartSvg.clientHeight || 340;
+    const padding = {top:20,right:20,bottom:28,left:36};
+    const w = width - padding.left - padding.right;
+    const h = height - padding.top - padding.bottom;
+    chartSvg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+    chartSvg.innerHTML='';
+
+    // Compute data cum
+    let cumP=0,cumA=0;
+    const data = tasks.map(t=>{ const wt=+(t.weight??t.plan??0); cumP+=wt; cumA+=+(t.actual||0); return {id:t.id,cumPlan:cumP,cumActual:cumA}; });
+    const maxY = Math.max(cumP, cumA, 100);
+
+    // scales
+    const xCount = Math.max(data.length-1,1);
+    const x = (i)=> padding.left + (i*(w/xCount));
+    const y = (v)=> padding.top + (h - (v/maxY)*h);
+
+    // gridlines
+    for(let gy=0; gy<=5; gy++){
+      const yy = padding.top + (h*gy/5);
+      const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+      line.setAttribute('x1', padding.left); line.setAttribute('x2', padding.left+w);
+      line.setAttribute('y1', yy); line.setAttribute('y2', yy); line.setAttribute('class','gridline');
+      chartSvg.appendChild(line);
+      const lab = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lab.setAttribute('x', 4); lab.setAttribute('y', yy+4); lab.setAttribute('class','axis'); lab.textContent = Math.round(maxY*(1-gy/5));
+      chartSvg.appendChild(lab);
+    }
+
+    // X axis labels
+    data.forEach((d,i)=>{
+      const tx = x(i);
+      const ty = padding.top + h + 16;
+      const lab = document.createElementNS('http://www.w3.org/2000/svg','text');
+      lab.setAttribute('x', tx); lab.setAttribute('y', ty); lab.setAttribute('text-anchor','middle'); lab.setAttribute('class','axis');
+      lab.textContent = d.id; chartSvg.appendChild(lab);
+    });
+
+    // Paths
+    function makePath(key, color, strokeWidth){
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      let dstr='';
+      data.forEach((d,i)=>{ const px=x(i), py=y(d[key]); dstr += (i? ' L':'M')+px+' '+py; });
+      p.setAttribute('d', dstr); p.setAttribute('fill','none'); p.setAttribute('stroke', color); p.setAttribute('stroke-width', strokeWidth);
+      chartSvg.appendChild(p);
+    }
+    makePath('cumPlan', '#e2e8f0', 2);
+    makePath('cumActual', '#4f46e5', 3.5);
+
+    // Today ref line at currentTaskId
+    const curId = currentTaskId();
+    const idx = data.findIndex(d=>d.id===curId);
+    if(idx>=0){
+      const rx = x(idx);
+      const ref = document.createElementNS('http://www.w3.org/2000/svg','line');
+      ref.setAttribute('x1', rx); ref.setAttribute('x2', rx); ref.setAttribute('y1', padding.top); ref.setAttribute('y2', padding.top+h);
+      ref.setAttribute('stroke', '#f43f5e'); ref.setAttribute('stroke-width', '2'); ref.setAttribute('stroke-dasharray','5 5');
+      chartSvg.appendChild(ref);
+      const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('x', rx); label.setAttribute('y', padding.top-6); label.setAttribute('text-anchor','middle'); label.setAttribute('fill','#f43f5e'); label.setAttribute('font-size','10'); label.setAttribute('font-weight','900');
+      label.textContent = 'วันนี้: '+todayBE(); chartSvg.appendChild(label);
+    }
+  }
+
+  // ---- Render Header/Stats/Advice ----
+  function renderStats(){
+    const prog = percentProgress();
+    totalProgressEl.textContent = prog + '%';
+    const v = variance();
+    varianceTitle.textContent = 'Variance: ' + (v>0? '+':'') + v + '%';
+    if(v<0){ varianceBox.style.background='rgba(244,63,94,.15)'; varianceIcon.textContent='⚠️'; varianceText.textContent='โครงการล่าช้ากว่าแผน'; }
+    else { varianceBox.style.background='rgba(255,255,255,.12)'; varianceIcon.textContent='✅'; varianceText.textContent='โครงการเป็นไปตามแผน'; }
+
+    const dl = daysUntilBE(PRESENTATION_DATE);
+    advice.textContent = (dl<=30)
+      ? `⚠️ ใกล้วันนำเสนอแล้ว เหลือเพียง ${dl} วัน โปรดเร่งสรุปเนื้อหาและตรวจสอบความถูกต้องของรายงาน`
+      : `ขณะนี้ยังอยู่ในช่วงดำเนินการ กิจกรรมปัจจุบันคือ ID ${currentTaskId()} โปรดรักษามาตรฐานการทำงานให้ต่อเนื่อง`;
+  }
+
+  function renderHeader(){
+    todayStrEl.textContent = todayBE();
+    daysLeftEl.textContent = daysUntilBE(PRESENTATION_DATE);
+    updateOnline();
+  }
+
+  function renderAll(){ renderHeader(); renderStats(); renderTable(); renderChart(); }
+
+  // ---- Events ----
+  addBtn.addEventListener('click', openAdd);
+  shareBtn.addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(location.href);
+      shareText.textContent = 'คัดลอกแล้ว'; setTimeout(()=> shareText.textContent='แชร์ลิงก์', 1500);
+    }catch(e){ alert('คัดลอกลิงก์ไม่สำเร็จ'); }
+  });
+
+  // ---- Init ----
+  renderAll();
+  window.addEventListener('resize', renderChart);
+})();
+</script>
+</body>
+</html>
